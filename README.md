@@ -3,6 +3,7 @@
 ## Installation
 export JAVA_HOME=$(/usr/libexec/java_home -v11)
 
+## Request and response security
 ## REST endpoint
 mvn clean compile exec:java
 
