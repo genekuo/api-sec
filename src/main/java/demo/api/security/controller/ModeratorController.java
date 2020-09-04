@@ -6,6 +6,7 @@ import spark.Request;
 import spark.Response;
 
 public class ModeratorController {
+
     private final Database database;
 
     public ModeratorController(Database database) {

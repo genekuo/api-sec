@@ -29,6 +29,11 @@ public class SpaceController {
         if (!owner.matches("[a-zA-Z][a-zA-Z0-9]{1,29}")) {
             throw new IllegalArgumentException("invalid username");
         }
+        var subject = request.attribute("subject");
+        if (!owner.equals(subject)) {
+            throw new IllegalArgumentException(
+                    "owner must match authenticated user");
+        }
 
         return database.withTransaction(tx -> {
             var spaceId = database.findUniqueLong(
@@ -37,6 +42,10 @@ public class SpaceController {
             database.updateUnique(
                     "INSERT INTO spaces(space_id, name, owner) " +
                             "VALUES(?, ?, ?);", spaceId, spaceName, owner);
+
+            database.updateUnique(
+                    "INSERT INTO permissions(space_id, user_id, perms) " +
+                            "VALUES(?, ?, ?)", spaceId, owner, "rwd");
 
             response.status(201);
             response.header("Location", "/spaces/" + spaceId);
@@ -54,6 +63,10 @@ public class SpaceController {
         var user = json.getString("author");
         if (!user.matches("[a-zA-Z][a-zA-Z0-9]{0,29}")) {
             throw new IllegalArgumentException("invalid username");
+        }
+        if (!user.equals(request.attribute("subject"))) {
+            throw new IllegalArgumentException(
+                    "author must match authenticated user");
         }
         var message = json.getString("message");
         if (message.length() > 1024) {
@@ -105,6 +118,26 @@ public class SpaceController {
         return new JSONArray(messages.stream()
                 .map(msgId -> "/spaces/" + spaceId + "/messages/" + msgId)
                 .collect(Collectors.toList()));
+    }
+
+    public JSONObject addMember(Request request, Response response) {
+        var json = new JSONObject(request.body());
+        var spaceId = Long.parseLong(request.params(":spaceId"));
+        var userToAdd = json.getString("username");
+        var perms = json.getString("permissions");
+
+        if (!perms.matches("r?w?d?")) {
+            throw new IllegalArgumentException("invalid permissions");
+        }
+
+        database.updateUnique(
+                "INSERT INTO permissions(space_id, user_id, perms) " +
+                        "VALUES(?, ?, ?)", spaceId, userToAdd, perms);
+
+        response.status(200);
+        return new JSONObject()
+                .put("username", userToAdd)
+                .put("permissions", perms);
     }
 
     public static class Message {

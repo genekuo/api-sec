@@ -30,3 +30,6 @@ bin
 /.nb-gradle/
 .DS_Store
 ML-labb
+
+###
+*.p12
