@@ -1,10 +1,9 @@
 package demo.api.security;
 
 import com.google.common.util.concurrent.RateLimiter;
-import demo.api.security.controller.AuditController;
-import demo.api.security.controller.ModeratorController;
-import demo.api.security.controller.SpaceController;
-import demo.api.security.controller.UserController;
+import demo.api.security.controller.*;
+import demo.api.security.token.CookieTokenStore;
+import demo.api.security.token.TokenStore;
 import org.dalesbred.Database;
 import org.dalesbred.result.EmptyResultException;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -12,6 +11,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import spark.Request;
 import spark.Response;
+import spark.Spark;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -25,6 +25,7 @@ import static spark.Spark.*;
 public class Main {
 
     public static void main(String... args) throws Exception {
+        Spark.staticFiles.location("/public");
         secure("localhost.p12", "changeit", null, null);
         var datasource = JdbcConnectionPool.create(
                 "jdbc:h2:mem:natter", "natter", "password");
@@ -66,10 +67,18 @@ public class Main {
             response.header("Server", "");
         });
 
+        TokenStore tokenStore = new CookieTokenStore();
+        var tokenController = new TokenController(tokenStore);
+
         before(userController::authenticate);
+        before(tokenController::validateToken);
 
         before(auditController::auditRequestStart);
         afterAfter(auditController::auditRequestEnd);
+
+        before("/sessions", userController::requireAuthentication);
+        post("/sessions", tokenController::login);
+        delete("/sessions", tokenController::logout);
 
         before("/spaces", userController::requireAuthentication);
         post("/spaces", spaceController::createSpace);
