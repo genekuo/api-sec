@@ -3,6 +3,8 @@ package demo.api.security;
 import com.google.common.util.concurrent.RateLimiter;
 import demo.api.security.controller.*;
 import demo.api.security.token.CookieTokenStore;
+import demo.api.security.token.DatabaseTokenStore;
+import demo.api.security.token.HmacTokenStore;
 import demo.api.security.token.TokenStore;
 import org.dalesbred.Database;
 import org.dalesbred.result.EmptyResultException;
@@ -13,9 +15,13 @@ import spark.Request;
 import spark.Response;
 import spark.Spark;
 
+import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.KeyStore;
+import java.util.Set;
 
+import static spark.Service.SPARK_DEFAULT_PORT;
 import static spark.Spark.*;
 
 /**
@@ -27,6 +33,9 @@ public class Main {
     public static void main(String... args) throws Exception {
         Spark.staticFiles.location("/public");
         secure("localhost.p12", "changeit", null, null);
+        port(args.length > 0 ? Integer.parseInt(args[0])
+                : SPARK_DEFAULT_PORT);
+
         var datasource = JdbcConnectionPool.create(
                 "jdbc:h2:mem:natter", "natter", "password");
         var database = Database.forDataSource(datasource);
@@ -40,12 +49,12 @@ public class Main {
         var auditController = new AuditController(database);
 
         var rateLimiter = RateLimiter.create(2.0d);
-
         before((request, response) -> {
             if (!rateLimiter.tryAcquire()) {
                 halt(429);
             }
         });
+        before(new CorsFilter(Set.of("https://localhost:9999")));
 
         before(((request, response) -> {
             if (request.requestMethod().equals("POST") &&
@@ -67,7 +76,15 @@ public class Main {
             response.header("Server", "");
         });
 
-        TokenStore tokenStore = new CookieTokenStore();
+        var keyPassword = System.getProperty("keystore.password",
+                "changeit").toCharArray();
+        var keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(new FileInputStream("keystore.p12"),
+                keyPassword);
+        var macKey = keyStore.getKey("hmac-key", keyPassword);
+
+        var databaseTokenStore = new DatabaseTokenStore(database);
+        var tokenStore = new HmacTokenStore(databaseTokenStore, macKey);
         var tokenController = new TokenController(tokenStore);
 
         before(userController::authenticate);
@@ -83,7 +100,7 @@ public class Main {
         before("/spaces", userController::requireAuthentication);
         post("/spaces", spaceController::createSpace);
 
-        // Additional REST endpoints
+        // Additional REST endpoints not covered in the book:
 
         before("/spaces/:spaceId/messages",
                 userController.requirePermission("POST", "w"));
@@ -112,6 +129,11 @@ public class Main {
 
         get("/logs", auditController::readAuditLog);
         post("/users", userController::registerUser);
+        before("/expired_tokens", userController::requireAuthentication);
+        delete("/expired_tokens", (request, response) -> {
+            databaseTokenStore.deleteExpiredTokens();
+            return new JSONObject();
+        });
 
         internalServerError(new JSONObject()
                 .put("error", "internal server error").toString());
