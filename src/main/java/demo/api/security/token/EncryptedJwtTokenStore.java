@@ -16,18 +16,24 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 
-public class EncryptedJwtTokenStore implements TokenStore {
+public class EncryptedJwtTokenStore implements SecureTokenStore {
 
     private final SecretKey encKey;
+    private final DatabaseTokenStore tokenAllowlist;
 
-    public EncryptedJwtTokenStore(SecretKey encKey) {
+    public EncryptedJwtTokenStore(SecretKey encKey,
+                                  DatabaseTokenStore tokenAllowlist) {
         this.encKey = encKey;
+        this.tokenAllowlist = tokenAllowlist;
     }
 
     @Override
     public String create(Request request, Token token) {
+        var allowlistToken = new Token(token.expiry, token.username);
+        var jwtId = tokenAllowlist.create(request, allowlistToken);
 
         var claimsBuilder = new JWTClaimsSet.Builder()
+                .jwtID(jwtId)
                 .subject(token.username)
                 .audience("https://localhost:4567")
                 .expirationTime(Date.from(token.expiry));
@@ -56,6 +62,10 @@ public class EncryptedJwtTokenStore implements TokenStore {
             jwt.decrypt(decryptor);
 
             var claims = jwt.getJWTClaimsSet();
+            var jwtId = claims.getJWTID();
+            if (tokenAllowlist.read(request, jwtId).isEmpty()) {
+                return Optional.empty();
+            }
 
             if (!claims.getAudience().contains("https://localhost:4567")) {
                 return Optional.empty();
@@ -69,6 +79,7 @@ public class EncryptedJwtTokenStore implements TokenStore {
                 if (ignore.contains(attr)) continue;
                 token.attributes.put(attr, claims.getStringClaim(attr));
             }
+
             return Optional.of(token);
         } catch (ParseException | JOSEException e) {
             return Optional.empty();
@@ -77,7 +88,16 @@ public class EncryptedJwtTokenStore implements TokenStore {
 
     @Override
     public void revoke(Request request, String tokenId) {
+        try {
+            var jwt = EncryptedJWT.parse(tokenId);
 
+            var decryptor = new DirectDecrypter(encKey);
+            jwt.decrypt(decryptor);
+            var claims = jwt.getJWTClaimsSet();
+
+            tokenAllowlist.revoke(request, claims.getJWTID());
+        } catch (ParseException | JOSEException e) {
+            throw new IllegalArgumentException("invalid token", e);
+        }
     }
-
 }

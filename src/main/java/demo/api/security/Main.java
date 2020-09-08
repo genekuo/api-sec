@@ -84,22 +84,12 @@ public class Main {
         keyStore.load(new FileInputStream("keystore.p12"),
                 keyPassword);
         var macKey = keyStore.getKey("hmac-key", keyPassword);
-
         var encKey = keyStore.getKey("aes-key", keyPassword);
-        var naclKey = SecretBox.key(encKey.getEncoded());
-        //var tokenStore = new EncryptedTokenStore(new JsonTokenStore(), naclKey);
-        var tokenStore = new EncryptedJwtTokenStore((SecretKey) encKey);
 
-        var databaseTokenStore = new DatabaseTokenStore(database);
-        //TokenStore tokenStore = new JsonTokenStore();
-        //tokenStore = new HmacTokenStore(tokenStore, macKey);
-
-        /*var algorithm = JWSAlgorithm.HS256;
-        var signer = new MACSigner((SecretKey) macKey);
-        var verifier = new MACVerifier((SecretKey) macKey);
-        TokenStore tokenStore = new SignedJwtTokenStore(signer, verifier,
-                algorithm, "https://localhost:4567");*/
-        var tokenController = new TokenController(tokenStore);
+        var tokenWhitelist = new DatabaseTokenStore(database);
+        var tokenController = new TokenController(
+                new EncryptedJwtTokenStore(
+                        (SecretKey) encKey, tokenWhitelist));
 
         before(userController::authenticate);
         before(tokenController::validateToken);
@@ -114,7 +104,7 @@ public class Main {
         before("/spaces", userController::requireAuthentication);
         post("/spaces", spaceController::createSpace);
 
-        // Additional REST endpoints not covered in the book:
+        // Additional REST endpoints
 
         before("/spaces/:spaceId/messages",
                 userController.requirePermission("POST", "w"));
@@ -143,11 +133,6 @@ public class Main {
 
         get("/logs", auditController::readAuditLog);
         post("/users", userController::registerUser);
-        before("/expired_tokens", userController::requireAuthentication);
-        delete("/expired_tokens", (request, response) -> {
-            databaseTokenStore.deleteExpiredTokens();
-            return new JSONObject();
-        });
 
         internalServerError(new JSONObject()
                 .put("error", "internal server error").toString());
