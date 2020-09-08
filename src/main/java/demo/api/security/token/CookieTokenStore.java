@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.security.*;
 
-public class CookieTokenStore implements TokenStore {
+public class CookieTokenStore implements SecureTokenStore {
 
     @Override
     public String create(Request request, Token token) {

@@ -1,5 +1,6 @@
 package demo.api.security.controller;
 
+import demo.api.security.token.SecureTokenStore;
 import demo.api.security.token.TokenStore;
 import org.json.JSONObject;
 import spark.Request;
@@ -9,11 +10,13 @@ import java.time.temporal.ChronoUnit;
 
 import static java.time.Instant.now;
 
+import static spark.Spark.halt;
+
 public class TokenController {
 
-    private final TokenStore tokenStore;
+    private final SecureTokenStore tokenStore;
 
-    public TokenController(TokenStore tokenStore) {
+    public TokenController(SecureTokenStore tokenStore) {
         this.tokenStore = tokenStore;
     }
 
@@ -44,7 +47,7 @@ public class TokenController {
                 response.header("WWW-Authenticate",
                         "Bearer error=\"invalid_token\"," +
                                 "error_description=\"Expired\"");
-                //halt(401);
+                halt(401);
             }
         });
     }
@@ -62,3 +65,4 @@ public class TokenController {
         return new JSONObject();
     }
 }
+

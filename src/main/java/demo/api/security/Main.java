@@ -1,20 +1,22 @@
 package demo.api.security;
 
 import com.google.common.util.concurrent.RateLimiter;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
 import demo.api.security.controller.*;
-import demo.api.security.token.CookieTokenStore;
-import demo.api.security.token.DatabaseTokenStore;
-import demo.api.security.token.HmacTokenStore;
-import demo.api.security.token.TokenStore;
+import demo.api.security.token.*;
 import org.dalesbred.Database;
 import org.dalesbred.result.EmptyResultException;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.json.JSONException;
 import org.json.JSONObject;
+import software.pando.crypto.nacl.SecretBox;
 import spark.Request;
 import spark.Response;
 import spark.Spark;
 
+import javax.crypto.SecretKey;
 import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -83,8 +85,20 @@ public class Main {
                 keyPassword);
         var macKey = keyStore.getKey("hmac-key", keyPassword);
 
+        var encKey = keyStore.getKey("aes-key", keyPassword);
+        var naclKey = SecretBox.key(encKey.getEncoded());
+        //var tokenStore = new EncryptedTokenStore(new JsonTokenStore(), naclKey);
+        var tokenStore = new EncryptedJwtTokenStore((SecretKey) encKey);
+
         var databaseTokenStore = new DatabaseTokenStore(database);
-        var tokenStore = new HmacTokenStore(databaseTokenStore, macKey);
+        //TokenStore tokenStore = new JsonTokenStore();
+        //tokenStore = new HmacTokenStore(tokenStore, macKey);
+
+        /*var algorithm = JWSAlgorithm.HS256;
+        var signer = new MACSigner((SecretKey) macKey);
+        var verifier = new MACVerifier((SecretKey) macKey);
+        TokenStore tokenStore = new SignedJwtTokenStore(signer, verifier,
+                algorithm, "https://localhost:4567");*/
         var tokenController = new TokenController(tokenStore);
 
         before(userController::authenticate);

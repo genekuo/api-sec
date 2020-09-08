@@ -15,7 +15,7 @@ import org.slf4j.*;
 
 import static demo.api.security.token.CookieTokenStore.sha256;
 
-public class DatabaseTokenStore implements TokenStore {
+public class DatabaseTokenStore implements ConfidentialTokenStore {
     private static final Logger logger =
             LoggerFactory.getLogger(DatabaseTokenStore.class);
 

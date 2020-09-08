@@ -10,61 +10,47 @@ cd to project root
 mkcert -pkcs12 localhost
 (default password: changeit)
 
-## CORS
-[API server]
-mvn clean compile exec:java
+## Stateless token
+mvn clean compile exec:java \
+-Djava.security.egd=file:/dev/urandom \
+-Dkeystore.password=changeit
 
 curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
 -H 'Content-Type: application/json' \
 -d '{"username":"test","password": "password"}' \
 https://localhost:4567/users
 
-[UI from a different origin]
-mvn clean compile exec:java -Dexec.args=9999
-https://localhost:9999/login.html
-submit usrename/password to API server
-create space/test to API server
-
-## Non-cookie token
-mvn clean compile exec:java -Djava.security.egd=file:/dev/urandom
-
 curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
--H 'Content-Type: application/json' \
--d '{"username":"test","password": "password"}' \
-https://localhost:4567/users
-
-[No Set-Cookie header in the response]
-curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
--i -u test:password \
+-u test:password \
 -H 'Content-Type: application/json' \
 -X POST https://localhost:4567/sessions
 
-[Pass token value in X-CSRF-Token]
-curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
--i -H 'Content-Type: application/json' \
--H 'X-CSRF-Token: <token>' \
--d '{"name":"test space","owner":"test"}' \
-https://localhost:4567/spaces
-
-### Tokens in web storage
-mvn clean compile exec:java -Djava.security.egd=file:/dev/urandom
+## Standard JWT
+mvn clean compile exec:java \
+-Djava.security.egd=file:/dev/urandom \
+-Dkeystore.password=changeit
 
 curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
 -H 'Content-Type: application/json' \
 -d '{"username":"test","password": "password"}' \
 https://localhost:4567/users
 
-mvn clean compile exec:java -Dexec.args=9999
-https://localhost:9999/login.html
-submit usrename/password to API server
-create space/test to API server
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-u test:password \
+-H 'Content-Type: application/json' \
+-X POST https://localhost:4567/sessions
 
-### HMAC
-[cd to the root folder]
-keytool -genseckey -keyalg HmacSHA256 -keysize 256 \
--alias hmac-key -keystore keystore.p12 \
--storetype PKCS12 \
--storepass changeit
+pass token value to the debugger on https://jwt.io
+
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer <token>' \
+-d '{"name":"test space","owner":"test"}' \
+https://localhost:4567/spaces
+
+### Authenticated encryption
+keytool -genseckey -keyalg AES -keysize 256 \
+-alias aes-key -keystore keystore.p12 -storepass changeit
 
 mvn clean compile exec:java \
 -Djava.security.egd=file:/dev/urandom \
@@ -79,5 +65,35 @@ curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
 -u test:password \
 -H 'Content-Type: application/json' \
 -X POST https://localhost:4567/sessions
+
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer <token>' \
+-d '{"name":"test space","owner":"test"}' \
+https://localhost:4567/spaces
+
+### Encrypted JWT
+mvn clean compile exec:java \
+-Djava.security.egd=file:/dev/urandom \
+-Dkeystore.password=changeit
+
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-H 'Content-Type: application/json' \
+-d '{"username":"test","password": "password"}' \
+https://localhost:4567/users
+
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-u test:password \
+-H 'Content-Type: application/json' \
+-X POST https://localhost:4567/sessions
+
+curl --cacert "$(mkcert -CAROOT)/rootCA.pem" \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer eyJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwiYWxnIjoiZGlyIn0..RMnSCAAEALi8v5wz5By6hQ.z_695UN2VbYzAaVOsf36qNZtKqgb0g4v99XW1PglVSLipADjdBqy4gimq2iply5GdHJjdXCYPE69I87C7NWZxwAzdBSz7rJHwo0uLbBIElc.BTSQp_JsdeC5wzZONMym1w' \
+-d '{"name":"test space","owner":"test"}' \
+https://localhost:4567/spaces
+
+### Types
+
 
 
